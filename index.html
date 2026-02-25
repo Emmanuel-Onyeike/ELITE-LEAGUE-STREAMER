@@ -118,171 +118,192 @@
             </button>
         </div>
     </div>
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
+    const firebaseConfig = {
+        apiKey: "AIzaSyDsxf_2FkvyfU2QQsd_DBytd9pPi6r4o0k",
+        authDomain: "learning-pro-f756e.firebaseapp.com",
+        projectId: "learning-pro-f756e",
+        storageBucket: "learning-pro-f756e.firebasestorage.app",
+        messagingSenderId: "410163553623",
+        appId: "1:410163553623:web:10fceb9616086fe9640a12",
+        measurementId: "G-RXKDXG4J84"
+    };
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyDsxf_2FkvyfU2QQsd_DBytd9pPi6r4o0k",
-            authDomain: "learning-pro-f756e.firebaseapp.com",
-            projectId: "learning-pro-f756e",
-            storageBucket: "learning-pro-f756e.firebasestorage.app",
-            messagingSenderId: "410163553623",
-            appId: "1:410163553623:web:10fceb9616086fe9640a12",
-            measurementId: "G-RXKDXG4J84"
-        };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
 
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
+    const AGORA_APP_ID = "6b0b36a41dae4815b0d440836a4fb1f6";
+    const CHANNEL = "EliteLeagueFinals";
+    const ADMIN_PIN = "2026";
 
-        const AGORA_APP_ID = "6b0b36a41dae4815b0d440836a4fb1f6";
-        const CHANNEL = "EliteLeagueFinals";
-        const ADMIN_PIN = "2026";
+    const viewerClient = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+    let hostClient = null;
+    let localTracks = { audioTrack: null, videoTrack: null };
+    let isStreaming = false;
 
-        const viewerClient = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
-        let hostClient = null;
-        let localTracks = { audioTrack: null, videoTrack: null };
-        let isStreaming = false;
+    const openModal = id => document.getElementById(id)?.classList.remove('hidden');
+    const closeModal = id => document.getElementById(id)?.classList.add('hidden');
 
-        const openModal = id => document.getElementById(id)?.classList.remove('hidden');
-        const closeModal = id => document.getElementById(id)?.classList.add('hidden');
+    const verifyAdmin = () => {
+        const pin = document.getElementById('pinInput')?.value;
+        if (pin === ADMIN_PIN) {
+            closeModal('pinModal');
+            document.getElementById('adminPanel')?.classList.remove('hidden');
+            document.getElementById('loginBtn').innerText = "DASHBOARD";
+            document.getElementById('loginBtn').classList.add('bg-amber-500', 'text-black');
+        } else {
+            alert("Wrong PIN – try 2026");
+            document.getElementById('pinInput').value = "";
+        }
+    };
 
-        const verifyAdmin = () => {
-            const pin = document.getElementById('pinInput')?.value;
-            if (pin === ADMIN_PIN) {
-                closeModal('pinModal');
-                document.getElementById('adminPanel')?.classList.remove('hidden');
-                document.getElementById('loginBtn').innerText = "DASHBOARD";
-                document.getElementById('loginBtn').classList.add('bg-amber-500', 'text-black');
-            } else {
-                alert("Wrong PIN – try 2026");
-                document.getElementById('pinInput').value = "";
-            }
-        };
+    const toggleStream = async () => {
+        const btn = document.getElementById('streamToggleBtn');
+        if (!btn) return;
 
-        const toggleStream = async () => {
-            const btn = document.getElementById('streamToggleBtn');
-            if (!btn) return;
-
-            if (!isStreaming) {
-                try {
-                    // Debug: list cameras
-                    const devices = await navigator.mediaDevices.enumerateDevices();
-                    const cams = devices.filter(d => d.kind === 'videoinput');
-                    console.log("Available cameras:", cams.length, cams.map(d => d.label || d.deviceId));
-
-                    hostClient = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
-                    hostClient.setClientRole("host");
-                    await hostClient.join(AGORA_APP_ID, CHANNEL, null, null);
-                    console.log("Host joined channel");
-
-                    localTracks.audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-
-                    // Try low resolution first – most phones accept this
-                    try {
-                        localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack({
-                            encoderConfig: "240p",
-                            facingMode: "user" // try front camera first
-                        });
-                        localTracks.videoTrack.play("local-player");
-                    } catch (camErr) {
-                        console.warn("Camera failed:", camErr);
-                        alert("Camera not available – going audio-only. Check permissions or try another device.");
-                    }
-
-                    await hostClient.publish(Object.values(localTracks));
-                    console.log("Published tracks (video may be missing if camera failed)");
-
-                    isStreaming = true;
-                    btn.innerText = "STOP FEED";
-                    btn.classList.add('bg-red-600', 'text-white');
-                    document.getElementById('statusIndicator').classList.add('bg-red-600');
-
-                } catch (e) {
-                    console.error("Go live failed:", e);
-                    alert("Failed to start: " + (e.message.includes("NotFoundError") ? "Camera/Microphone not found or blocked" : e.message));
-                }
-            } else {
-                try {
-                    if (hostClient) {
-                        await hostClient.unpublish(Object.values(localTracks));
-                        localTracks.audioTrack?.close();
-                        localTracks.videoTrack?.close();
-                        await hostClient.leave();
-                        hostClient = null;
-                    }
-                    isStreaming = false;
-                    btn.innerText = "Go Live to School";
-                    btn.classList.remove('bg-red-600', 'text-white');
-                    document.getElementById('statusIndicator').classList.remove('bg-red-600');
-                } catch (e) {
-                    console.error("Stop failed:", e);
-                }
-            }
-        };
-
-        const sendPushAlert = () => {
-            alert("Notification sent! (Firebase write is commented for now – check rules later)");
-        };
-
-        onValue(ref(db, 'globalAlert'), snap => {
-            const data = snap.val();
-            if (data && Date.now() - data.timestamp < 15000) {
-                document.getElementById('alertTitle').innerText = data.title || "Update";
-                document.getElementById('alertMsg').innerText = data.message || "";
-                openModal('alertModal');
-            }
-        });
-
-        async function initViewer() {
+        if (!isStreaming) {
             try {
-                viewerClient.setClientRole("audience");
-                await viewerClient.join(AGORA_APP_ID, CHANNEL, null, null);
-                console.log("Viewer connected");
+                // List devices for debug
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const cams = devices.filter(d => d.kind === 'videoinput');
+                console.log("Cameras available:", cams.length, cams.map(d => d.label || d.deviceId || "unnamed"));
 
-                viewerClient.on("user-published", async (user, mediaType) => {
-                    await viewerClient.subscribe(user, mediaType);
-                    if (mediaType === "video") {
-                        document.getElementById('standby-ui')?.classList.add('hidden');
-                        document.getElementById('statusIndicator')?.classList.add('bg-red-600');
-                        document.getElementById('live-tag')?.classList.remove('hidden');
-                        user.videoTrack.play("remote-player");
-                    }
-                    if (mediaType === "audio") user.audioTrack.play();
-                });
+                hostClient = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+                hostClient.setClientRole("host");
+                await hostClient.join(AGORA_APP_ID, CHANNEL, null, null);
+                console.log("Host joined channel");
 
-                viewerClient.on("user-unpublished", () => {
-                    document.getElementById('standby-ui')?.classList.remove('hidden');
-                    document.getElementById('statusIndicator')?.classList.remove('bg-red-600');
-                    document.getElementById('live-tag')?.classList.add('hidden');
-                    openModal('alertModal');
-                    document.getElementById('alertTitle').innerText = "Stream Ended";
-                    document.getElementById('alertMsg').innerText = "The broadcaster has stopped.";
-                });
+                localTracks.audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+                console.log("Microphone track ready");
+
+                // Try video track (low res + front camera)
+                try {
+                    localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack({
+                        encoderConfig: "240p",         // very safe resolution
+                        facingMode: "user",            // front camera
+                        optimizationMode: "motion"     // better for mobile
+                    });
+                    localTracks.videoTrack.play("local-player");
+                    console.log("Video track ready");
+                } catch (camErr) {
+                    console.warn("Camera unavailable:", camErr.message);
+                    alert("Camera access failed (permission/device issue) — broadcasting audio only.");
+                    // Mark preview as audio-only
+                    document.getElementById('local-player').innerHTML = '<div class="flex items-center justify-center h-full text-amber-500 text-xl font-bold">AUDIO ONLY</div>';
+                }
+
+                // Only publish real tracks (skip null video)
+                const tracksToPublish = [];
+                if (localTracks.audioTrack) tracksToPublish.push(localTracks.audioTrack);
+                if (localTracks.videoTrack) tracksToPublish.push(localTracks.videoTrack);
+
+                if (tracksToPublish.length === 0) {
+                    throw new Error("No tracks to publish (mic also failed?)");
+                }
+
+                await hostClient.publish(tracksToPublish);
+                console.log(`Published ${tracksToPublish.length} track(s)`);
+
+                isStreaming = true;
+                btn.innerText = "STOP FEED";
+                btn.classList.add('bg-red-600', 'text-white');
+                document.getElementById('statusIndicator').classList.add('bg-red-600');
+
             } catch (e) {
-                console.warn("Viewer join issue:", e);
+                console.error("Go live error:", e);
+                alert("Failed to start broadcast: " + (e.message || "unknown error"));
+            }
+        } else {
+            try {
+                if (hostClient) {
+                    const tracksToUnpublish = [];
+                    if (localTracks.audioTrack) tracksToUnpublish.push(localTracks.audioTrack);
+                    if (localTracks.videoTrack) tracksToUnpublish.push(localTracks.videoTrack);
+                    if (tracksToUnpublish.length > 0) {
+                        await hostClient.unpublish(tracksToUnpublish);
+                    }
+                    localTracks.audioTrack?.close();
+                    localTracks.videoTrack?.close();
+                    localTracks = { audioTrack: null, videoTrack: null };
+                    await hostClient.leave();
+                    hostClient = null;
+                    console.log("Host stopped cleanly");
+                }
+                isStreaming = false;
+                btn.innerText = "Go Live to School";
+                btn.classList.remove('bg-red-600', 'text-white');
+                document.getElementById('statusIndicator').classList.remove('bg-red-600');
+                document.getElementById('local-player').innerHTML = ''; // clear preview
+            } catch (e) {
+                console.error("Stop error:", e);
             }
         }
+    };
 
-        document.addEventListener("DOMContentLoaded", () => {
-            document.getElementById('statusIndicator').classList.add('connecting');
-            initViewer();
+    const sendPushAlert = () => {
+        alert("Notification triggered! (Firebase writes are commented — enable when ready)");
+    };
 
-            document.getElementById('loginBtn')?.addEventListener('click', () => openModal('pinModal'));
-            document.getElementById('submitPin')?.addEventListener('click', verifyAdmin);
-            document.getElementById('closePin')?.addEventListener('click', () => closeModal('pinModal'));
-            document.getElementById('pushAlertBtn')?.addEventListener('click', sendPushAlert);
-            document.getElementById('streamToggleBtn')?.addEventListener('click', toggleStream);
-            document.getElementById('closeAlert')?.addEventListener('click', () => closeModal('alertModal'));
-            document.getElementById('logoutBtn')?.addEventListener('click', () => location.reload());
+    onValue(ref(db, 'globalAlert'), snap => {
+        const data = snap.val();
+        if (data && Date.now() - data.timestamp < 15000) {
+            document.getElementById('alertTitle').innerText = data.title || "Update";
+            document.getElementById('alertMsg').innerText = data.message || "";
+            openModal('alertModal');
+        }
+    });
 
-            if ("Notification" in window && Notification.permission !== "granted") {
-                Notification.requestPermission();
-            }
+    async function initViewer() {
+        try {
+            viewerClient.setClientRole("audience");
+            await viewerClient.join(AGORA_APP_ID, CHANNEL, null, null);
+            console.log("Viewer connected");
 
-            viewerClient.on("error", err => console.error("Agora error:", err));
-        });
-    </script>
+            viewerClient.on("user-published", async (user, mediaType) => {
+                await viewerClient.subscribe(user, mediaType);
+                if (mediaType === "video") {
+                    document.getElementById('standby-ui')?.classList.add('hidden');
+                    document.getElementById('statusIndicator')?.classList.add('bg-red-600');
+                    document.getElementById('live-tag')?.classList.remove('hidden');
+                    user.videoTrack.play("remote-player");
+                }
+                if (mediaType === "audio") user.audioTrack.play();
+            });
+
+            viewerClient.on("user-unpublished", () => {
+                document.getElementById('standby-ui')?.classList.remove('hidden');
+                document.getElementById('statusIndicator')?.classList.remove('bg-red-600');
+                document.getElementById('live-tag')?.classList.add('hidden');
+                openModal('alertModal');
+                document.getElementById('alertTitle').innerText = "Stream Ended";
+                document.getElementById('alertMsg').innerText = "Broadcaster stopped.";
+            });
+        } catch (e) {
+            console.warn("Viewer join issue:", e);
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById('statusIndicator').classList.add('connecting');
+        initViewer();
+
+        document.getElementById('loginBtn')?.addEventListener('click', () => openModal('pinModal'));
+        document.getElementById('submitPin')?.addEventListener('click', verifyAdmin);
+        document.getElementById('closePin')?.addEventListener('click', () => closeModal('pinModal'));
+        document.getElementById('pushAlertBtn')?.addEventListener('click', sendPushAlert);
+        document.getElementById('streamToggleBtn')?.addEventListener('click', toggleStream);
+        document.getElementById('closeAlert')?.addEventListener('click', () => closeModal('alertModal'));
+        document.getElementById('logoutBtn')?.addEventListener('click', () => location.reload());
+
+        if ("Notification" in window && Notification.permission !== "granted") {
+            Notification.requestPermission();
+        }
+
+        viewerClient.on("error", err => console.error("Agora error:", err));
+    });
+</script>
 </body>
 </html>

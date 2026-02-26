@@ -153,7 +153,7 @@
         const ADMIN_PIN = "2026";
         const MAX_ADMINS = 4;
 
-        const viewerClient = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+        const viewerClient = AgoraRTC.createClient({ mode: "live", codec: "h264" });
         let hostClient = null;
         let localTracks = { audioTrack: null, videoTrack: null };
         let isStreaming = false;
@@ -212,18 +212,20 @@
 
             if (!isStreaming) {
                 try {
-                    hostClient = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+                    hostClient = AgoraRTC.createClient({ mode: "live", codec: "h264" });
                     hostClient.setClientRole("host");
                     await hostClient.join(AGORA_APP_ID, CHANNEL, null, null);
+                    await hostClient.enableDualStream();
+                    hostClient.setStreamFallbackOption(2);
 
                     localTracks.audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
 
                     try {
                         localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack({
-                            encoderConfig: "720p_1",
+                            encoderConfig: "480p_1", // fast & clear for mobile
                             facingMode: currentFacingMode,
                             optimizationMode: "detail",
-                            bitrate: { min: 1500, max: 3000 }
+                            bitrate: { min: 600, max: 1200 }
                         });
                         localTracks.videoTrack.play("local-player");
                     } catch (e) {
@@ -270,10 +272,10 @@
             try {
                 currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
                 const newTrack = await AgoraRTC.createCameraVideoTrack({
-                    encoderConfig: "720p_1",
+                    encoderConfig: "480p_1",
                     facingMode: currentFacingMode,
                     optimizationMode: "detail",
-                    bitrate: { min: 1500, max: 3000 }
+                    bitrate: { min: 600, max: 1200 }
                 });
 
                 await hostClient.unpublish(localTracks.videoTrack);
@@ -288,42 +290,25 @@
             }
         };
 
-       // Send alert (save latest one persistently)
-const sendPushAlert = () => {
-    const alertData = {
-        title: "GAME BEGUN! 🏆",
-        message: "The Elite League Finals are live now! Join the stream.",
-        timestamp: Date.now()
-    };
-    set(ref(db, 'globalAlert/latest'), alertData);
-    showToast("Notification sent to all viewers!");
-};
-
-// Listen for latest alert (persistent for new users)
-onValue(ref(db, 'globalAlert/latest'), snap => {
-    const data = snap.val();
-    if (data && Date.now() - data.timestamp < 300000) { // 5 minutes window
-        showToast(`${data.title} — ${data.message}`, 8000); // longer display
-        document.getElementById('alertTitle').innerText = data.title || "Update";
-        document.getElementById('alertMsg').innerText = data.message || "";
-        openModal('alertModal');
-
-        // Browser notification if permitted
-        if (Notification.permission === "granted") {
-            new Notification(data.title, {
-                body: data.message,
-                icon: "/favicon.ico" // add your icon later
+        const sendPushAlert = () => {
+            set(ref(db, 'globalAlert/latest'), {
+                title: "GAME BEGUN! 🏆",
+                message: "The Elite League Finals are live now! Join the stream.",
+                timestamp: Date.now()
             });
-        }
-    }
-});
+            showToast("Notification sent to all viewers!");
+        };
 
-// Request permission on load
-if ("Notification" in window && Notification.permission !== "granted") {
-    Notification.requestPermission().then(perm => {
-        if (perm === "granted") showToast("Notifications enabled!");
-    });
-}
+        onValue(ref(db, 'globalAlert/latest'), snap => {
+            const data = snap.val();
+            if (data && Date.now() - data.timestamp < 300000) { // 5 min window
+                showToast(`${data.title} — ${data.message}`, 8000);
+                document.getElementById('alertTitle').innerText = data.title || "Update";
+                document.getElementById('alertMsg').innerText = data.message || "";
+                openModal('alertModal');
+            }
+        });
+
         async function initViewer() {
             try {
                 viewerClient.setClientRole("audience");
@@ -364,7 +349,9 @@ if ("Notification" in window && Notification.permission !== "granted") {
             document.getElementById('closeAlert')?.addEventListener('click', () => closeModal('alertModal'));
             document.getElementById('logoutBtn')?.addEventListener('click', () => location.reload());
 
-            if ("Notification" in window && Notification.permission !== "granted") Notification.requestPermission();
+            if ("Notification" in window && Notification.permission !== "granted") {
+                Notification.requestPermission();
+            }
         });
     </script>
 </body>

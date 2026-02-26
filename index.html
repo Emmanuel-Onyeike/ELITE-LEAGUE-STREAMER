@@ -10,15 +10,15 @@
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .connecting { animation: pulse 1.8s infinite; }
         #toast {
-            transition: all 0.5s ease-in-out;
-            box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.4);
+            transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 10px 30px -5px rgba(245, 158, 11, 0.5);
         }
     </style>
 </head>
 <body class="bg-[#050505] text-white font-sans antialiased overflow-x-hidden">
 
-    <!-- Toast -->
-    <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-600 to-amber-800 text-white px-6 py-4 rounded-2xl shadow-2xl backdrop-blur-lg transform -translate-y-20 opacity-0 z-[200] flex items-center gap-3 max-w-lg border border-amber-400/40">
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-600 to-amber-800 text-white px-6 py-4 rounded-2xl shadow-2xl backdrop-blur-lg transform -translate-y-24 opacity-0 z-[200] flex items-center gap-3 max-w-lg border border-amber-400/40">
         <svg class="w-6 h-6 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
         <span id="toastMessage" class="text-sm font-medium"></span>
     </div>
@@ -100,7 +100,7 @@
         </div>
     </main>
 
-    <!-- PIN Modal with slot warning -->
+    <!-- PIN Modal -->
     <div id="pinModal" class="fixed inset-0 flex items-center justify-center bg-black/95 z-[100] hidden p-4">
         <div class="bg-[#0f0f0f] p-10 rounded-[3rem] border border-white/10 w-full max-w-sm text-center shadow-2xl transition-all scale-100">
             <div class="w-20 h-20 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-8 border border-amber-500/20">
@@ -184,7 +184,7 @@
                 count = count || 0;
                 if (count >= MAX_ADMINS) {
                     slotMsg?.classList.remove('hidden');
-                    alert("All 4 admin slots are full.");
+                    showToast("All 4 admin slots are full.");
                     return count;
                 }
                 return count + 1;
@@ -195,7 +195,13 @@
                     document.getElementById('loginBtn').innerText = "DASHBOARD";
                     document.getElementById('loginBtn').classList.add('bg-amber-500', 'text-black');
                     slotMsg?.classList.add('hidden');
+                    showToast("Admin slot reserved — you're live!");
+                } else {
+                    showToast("Failed to reserve slot");
                 }
+            }).catch(err => {
+                console.error("Admin login error:", err);
+                showToast("Login failed: " + err.message);
             });
         };
 
@@ -236,7 +242,7 @@
                     document.getElementById('statusIndicator').classList.add('bg-red-600');
 
                 } catch (e) {
-                    alert("Failed to start: " + e.message);
+                    alert("Failed to go live: " + e.message);
                 }
             } else {
                 try {
@@ -288,7 +294,7 @@
                 message: "The Elite League Finals are live now!",
                 timestamp: Date.now()
             });
-            showToast("Notification sent!");
+            showToast("Notification sent to all viewers!");
         };
 
         onValue(ref(db, 'globalAlert'), snap => {

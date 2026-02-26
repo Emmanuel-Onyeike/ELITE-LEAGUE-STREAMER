@@ -13,6 +13,17 @@
             transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
             box-shadow: 0 10px 30px -5px rgba(245, 158, 11, 0.5);
         }
+        #chat-messages { 
+            scrollbar-width: thin; 
+            scrollbar-color: #f59e0b #1f2937; 
+        }
+        #chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+        #chat-messages::-webkit-scrollbar-thumb {
+            background-color: #f59e0b;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body class="bg-[#050505] text-white font-sans antialiased overflow-x-hidden">
@@ -93,6 +104,15 @@
                     </div>
                 </div>
 
+                <!-- Chat Box (only visible when live) -->
+                <div id="chat-container" class="hidden bg-black/70 border-t border-white/10">
+                    <div id="chat-messages" class="h-64 overflow-y-auto p-4 space-y-3 text-sm"></div>
+                    <div class="p-3 border-t border-white/10 flex gap-2">
+                        <input id="chat-input" type="text" placeholder="Say something... (emojis work!)" class="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-500">
+                        <button id="chat-send" class="bg-amber-600 hover:bg-amber-700 px-5 py-3 rounded-xl font-bold">Send</button>
+                    </div>
+                </div>
+
                 <div class="p-8 bg-black/40 border-t border-white/5 text-center text-gray-400 text-sm">
                     Main Court Feed Only
                 </div>
@@ -133,7 +153,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-        import { getDatabase, ref, onValue, runTransaction, set } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
+        import { getDatabase, ref, onValue, runTransaction, set, push } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDsxf_2FkvyfU2QQsd_DBytd9pPi6r4o0k",
@@ -158,6 +178,7 @@
         let localTracks = { audioTrack: null, videoTrack: null };
         let isStreaming = false;
         let currentFacingMode = "user";
+        let userId = Math.floor(1000 + Math.random() * 9000); // random 4-digit ID
 
         const openModal = id => document.getElementById(id)?.classList.remove('hidden');
         const closeModal = id => document.getElementById(id)?.classList.add('hidden');
@@ -208,6 +229,7 @@
         const toggleStream = async () => {
             const btn = document.getElementById('streamToggleBtn');
             const switchBtn = document.getElementById('switchCameraBtn');
+            const chatContainer = document.getElementById('chat-container');
             if (!btn) return;
 
             if (!isStreaming) {
@@ -222,7 +244,7 @@
 
                     try {
                         localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack({
-                            encoderConfig: "480p_1", // fast & clear for mobile
+                            encoderConfig: "480p_1",
                             facingMode: currentFacingMode,
                             optimizationMode: "detail",
                             bitrate: { min: 600, max: 1200 }
@@ -241,6 +263,7 @@
                     btn.innerText = "STOP FEED";
                     btn.classList.add('bg-red-600', 'text-white');
                     switchBtn?.classList.remove('hidden');
+                    chatContainer?.classList.remove('hidden');
                     document.getElementById('statusIndicator').classList.add('bg-red-600');
 
                 } catch (e) {
@@ -260,6 +283,7 @@
                     btn.innerText = "Go Live to School";
                     btn.classList.remove('bg-red-600', 'text-white');
                     switchBtn?.classList.add('hidden');
+                    chatContainer?.classList.add('hidden');
                     document.getElementById('statusIndicator').classList.remove('bg-red-600');
                     document.getElementById('local-player').innerHTML = '';
                 } catch (e) {}
@@ -301,12 +325,59 @@
 
         onValue(ref(db, 'globalAlert/latest'), snap => {
             const data = snap.val();
-            if (data && Date.now() - data.timestamp < 300000) { // 5 min window
+            if (data && Date.now() - data.timestamp < 300000) {
                 showToast(`${data.title} — ${data.message}`, 8000);
                 document.getElementById('alertTitle').innerText = data.title || "Update";
                 document.getElementById('alertMsg').innerText = data.message || "";
                 openModal('alertModal');
             }
+        });
+
+        // ────────────────────────────────────────────────
+        // Live Chat (TikTok-style)
+        // ────────────────────────────────────────────────
+        const chatInput = document.getElementById('chat-input');
+        const chatSend = document.getElementById('chat-send');
+        const chatMessages = document.getElementById('chat-messages');
+
+        // Send message
+        const sendChatMessage = () => {
+            const text = chatInput?.value.trim();
+            if (!text || !isStreaming) return;
+
+            const message = {
+                userId: userId,
+                text: text,
+                timestamp: Date.now()
+            };
+
+            push(ref(db, 'chat'), message);
+            chatInput.value = '';
+        };
+
+        chatSend?.addEventListener('click', sendChatMessage);
+        chatInput?.addEventListener('keypress', e => {
+            if (e.key === 'Enter') sendChatMessage();
+        });
+
+        // Listen for new messages
+        onValue(ref(db, 'chat'), snap => {
+            const data = snap.val();
+            if (!data) return;
+
+            chatMessages.innerHTML = ''; // clear and rebuild (simple, works for small chat)
+            Object.values(data).sort((a, b) => a.timestamp - b.timestamp).forEach(msg => {
+                const div = document.createElement('div');
+                div.className = 'flex items-start gap-2';
+                div.innerHTML = `
+                    <span class="text-amber-400 font-bold">User ${msg.userId}</span>
+                    <span class="text-gray-300">${msg.text}</span>
+                `;
+                chatMessages.appendChild(div);
+            });
+
+            // Auto-scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         });
 
         async function initViewer() {

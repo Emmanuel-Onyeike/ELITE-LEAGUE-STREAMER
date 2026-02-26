@@ -288,25 +288,42 @@
             }
         };
 
-        const sendPushAlert = () => {
-            set(ref(db, 'globalAlert'), {
-                title: "GAME BEGUN! 🏆",
-                message: "The Elite League Finals are live now!",
-                timestamp: Date.now()
+       // Send alert (save latest one persistently)
+const sendPushAlert = () => {
+    const alertData = {
+        title: "GAME BEGUN! 🏆",
+        message: "The Elite League Finals are live now! Join the stream.",
+        timestamp: Date.now()
+    };
+    set(ref(db, 'globalAlert/latest'), alertData);
+    showToast("Notification sent to all viewers!");
+};
+
+// Listen for latest alert (persistent for new users)
+onValue(ref(db, 'globalAlert/latest'), snap => {
+    const data = snap.val();
+    if (data && Date.now() - data.timestamp < 300000) { // 5 minutes window
+        showToast(`${data.title} — ${data.message}`, 8000); // longer display
+        document.getElementById('alertTitle').innerText = data.title || "Update";
+        document.getElementById('alertMsg').innerText = data.message || "";
+        openModal('alertModal');
+
+        // Browser notification if permitted
+        if (Notification.permission === "granted") {
+            new Notification(data.title, {
+                body: data.message,
+                icon: "/favicon.ico" // add your icon later
             });
-            showToast("Notification sent to all viewers!");
-        };
+        }
+    }
+});
 
-        onValue(ref(db, 'globalAlert'), snap => {
-            const data = snap.val();
-            if (data && Date.now() - data.timestamp < 15000) {
-                showToast(`${data.title} — ${data.message}`);
-                document.getElementById('alertTitle').innerText = data.title || "Update";
-                document.getElementById('alertMsg').innerText = data.message || "";
-                openModal('alertModal');
-            }
-        });
-
+// Request permission on load
+if ("Notification" in window && Notification.permission !== "granted") {
+    Notification.requestPermission().then(perm => {
+        if (perm === "granted") showToast("Notifications enabled!");
+    });
+}
         async function initViewer() {
             try {
                 viewerClient.setClientRole("audience");

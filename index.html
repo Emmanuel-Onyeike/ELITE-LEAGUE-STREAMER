@@ -7,20 +7,18 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.18.0.js"></script>
     <style>
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .connecting { animation: pulse 1.8s infinite; }
         #toast {
             transition: all 0.5s ease-in-out;
+            box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.4);
         }
     </style>
 </head>
 <body class="bg-[#050505] text-white font-sans antialiased overflow-x-hidden">
 
-    <!-- Toast Notification -->
-    <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 bg-amber-600/90 text-white px-6 py-4 rounded-xl shadow-2xl backdrop-blur-md transform -translate-y-24 opacity-0 z-[200] flex items-center gap-3 max-w-md border border-amber-400/30">
+    <!-- Toast -->
+    <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-600 to-amber-800 text-white px-6 py-4 rounded-2xl shadow-2xl backdrop-blur-lg transform -translate-y-20 opacity-0 z-[200] flex items-center gap-3 max-w-lg border border-amber-400/40">
         <svg class="w-6 h-6 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
         <span id="toastMessage" class="text-sm font-medium"></span>
     </div>
@@ -32,11 +30,9 @@
                 Elite <span class="text-amber-500">League</span>
             </h1>
         </div>
-        <div class="flex items-center gap-4">
-            <button id="loginBtn" class="text-xs font-bold bg-white/5 border border-white/10 px-5 py-2.5 rounded-full hover:bg-amber-500 hover:text-black transition-all">
-                ADMIN LOGIN
-            </button>
-        </div>
+        <button id="loginBtn" class="text-xs font-bold bg-white/5 border border-white/10 px-5 py-2.5 rounded-full hover:bg-amber-500 hover:text-black transition-all">
+            ADMIN LOGIN
+        </button>
     </header>
 
     <main class="max-w-5xl mx-auto p-4 md:p-10 space-y-12">
@@ -97,22 +93,22 @@
                     </div>
                 </div>
 
-                <div class="p-8 bg-black/40 border-t border-white/5">
-                    <p class="text-center text-gray-400 text-sm">Only Main Court Feed is active in this version</p>
+                <div class="p-8 bg-black/40 border-t border-white/5 text-center text-gray-400 text-sm">
+                    Main Court Feed Only
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- PIN Modal with slot limit message -->
+    <!-- PIN Modal with slot warning -->
     <div id="pinModal" class="fixed inset-0 flex items-center justify-center bg-black/95 z-[100] hidden p-4">
         <div class="bg-[#0f0f0f] p-10 rounded-[3rem] border border-white/10 w-full max-w-sm text-center shadow-2xl transition-all scale-100">
             <div class="w-20 h-20 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-8 border border-amber-500/20">
                 <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
             </div>
             <h3 class="text-2xl font-black mb-2 uppercase tracking-tighter">Admin Login</h3>
-            <p class="text-gray-500 text-sm mb-4 leading-relaxed font-medium">Enter your secure 4-digit PIN</p>
-            <p id="slotMessage" class="text-red-400 text-sm mb-6 hidden font-medium">All 4 admin slots are currently full. Wait for someone to stop streaming.</p>
+            <p class="text-gray-500 text-sm mb-4">Enter your secure 4-digit PIN</p>
+            <p id="slotMessage" class="text-red-400 text-sm mb-6 hidden font-medium">All 4 admin slots are full. Wait for someone to stop streaming.</p>
             <input type="password" id="pinInput" maxlength="4" placeholder="••••" class="w-full bg-black border border-white/10 p-5 rounded-2xl text-center text-4xl tracking-[0.5em] mb-6 outline-none focus:border-amber-500 text-amber-500 transition-all placeholder:text-gray-800">
             <button id="submitPin" class="w-full bg-gradient-to-r from-amber-400 to-amber-600 text-black font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-transform text-lg uppercase tracking-widest">
                 Access Panel
@@ -137,7 +133,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-        import { getDatabase, ref, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
+        import { getDatabase, ref, onValue, runTransaction, set } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDsxf_2FkvyfU2QQsd_DBytd9pPi6r4o0k",
@@ -161,23 +157,19 @@
         let hostClient = null;
         let localTracks = { audioTrack: null, videoTrack: null };
         let isStreaming = false;
-        let currentFacingMode = "user"; // start with front/selfie
+        let currentFacingMode = "user";
 
         const openModal = id => document.getElementById(id)?.classList.remove('hidden');
         const closeModal = id => document.getElementById(id)?.classList.add('hidden');
 
-        // Toast notification
         const showToast = (msg, duration = 5000) => {
             const toast = document.getElementById('toast');
             document.getElementById('toastMessage').textContent = msg;
-            toast.classList.remove('-translate-y-24', 'opacity-0');
+            toast.classList.remove('-translate-y-20', 'opacity-0');
             toast.classList.add('translate-y-0', 'opacity-100');
-            setTimeout(() => {
-                toast.classList.add('-translate-y-24', 'opacity-0');
-            }, duration);
+            setTimeout(() => toast.classList.add('-translate-y-20', 'opacity-0'), duration);
         };
 
-        // Admin login with slot limit
         const verifyAdmin = () => {
             const pin = document.getElementById('pinInput')?.value;
             const slotMsg = document.getElementById('slotMessage');
@@ -192,12 +184,12 @@
                 count = count || 0;
                 if (count >= MAX_ADMINS) {
                     slotMsg?.classList.remove('hidden');
-                    alert("All 4 admin slots are full. Wait for someone to stop streaming.");
-                    return count; // abort
+                    alert("All 4 admin slots are full.");
+                    return count;
                 }
                 return count + 1;
-            }).then(result => {
-                if (result.committed) {
+            }).then(r => {
+                if (r.committed) {
                     closeModal('pinModal');
                     document.getElementById('adminPanel')?.classList.remove('hidden');
                     document.getElementById('loginBtn').innerText = "DASHBOARD";
@@ -214,36 +206,28 @@
 
             if (!isStreaming) {
                 try {
-                    // Debug cameras
-                    const devices = await navigator.mediaDevices.enumerateDevices();
-                    const cams = devices.filter(d => d.kind === 'videoinput');
-                    console.log("Cameras:", cams.length, cams.map(d => d.label || d.deviceId));
-
                     hostClient = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
                     hostClient.setClientRole("host");
                     await hostClient.join(AGORA_APP_ID, CHANNEL, null, null);
-                    console.log("Host joined");
 
                     localTracks.audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
 
                     try {
                         localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack({
-                            encoderConfig: "720p_1",          // high quality 720p
+                            encoderConfig: "720p_1",
                             facingMode: currentFacingMode,
-                            optimizationMode: "detail",       // prioritize sharpness
-                            bitrate: { min: 1000, max: 2000 } // force higher bitrate
+                            optimizationMode: "detail",
+                            bitrate: { min: 1500, max: 3000 }
                         });
                         localTracks.videoTrack.play("local-player");
-                        console.log("Video track OK");
                     } catch (e) {
                         console.warn("Camera failed:", e);
-                        alert("Camera not available — going audio-only. Check permissions.");
-                        document.getElementById('local-player').innerHTML = '<div class="flex items-center justify-center h-full text-amber-500 text-xl font-bold">AUDIO ONLY</div>';
+                        alert("Camera unavailable — audio only.");
+                        document.getElementById('local-player').innerHTML = '<div class="flex items-center justify-center h-full text-amber-500 text-2xl font-bold">AUDIO ONLY</div>';
                     }
 
-                    const validTracks = [localTracks.audioTrack, localTracks.videoTrack].filter(Boolean);
-                    await hostClient.publish(validTracks);
-                    console.log(`Published ${validTracks.length} track(s)`);
+                    const tracks = [localTracks.audioTrack, localTracks.videoTrack].filter(Boolean);
+                    await hostClient.publish(tracks);
 
                     isStreaming = true;
                     btn.innerText = "STOP FEED";
@@ -252,30 +236,25 @@
                     document.getElementById('statusIndicator').classList.add('bg-red-600');
 
                 } catch (e) {
-                    console.error("Start failed:", e);
-                    alert("Failed to go live: " + e.message);
+                    alert("Failed to start: " + e.message);
                 }
             } else {
                 try {
                     if (hostClient) {
-                        const validTracks = [localTracks.audioTrack, localTracks.videoTrack].filter(Boolean);
-                        if (validTracks.length) await hostClient.unpublish(validTracks);
+                        const tracks = [localTracks.audioTrack, localTracks.videoTrack].filter(Boolean);
+                        if (tracks.length) await hostClient.unpublish(tracks);
                         localTracks.audioTrack?.close();
                         localTracks.videoTrack?.close();
-                        localTracks = { audioTrack: null, videoTrack: null };
                         await hostClient.leave();
                         hostClient = null;
                     }
-
                     isStreaming = false;
                     btn.innerText = "Go Live to School";
                     btn.classList.remove('bg-red-600', 'text-white');
                     switchBtn?.classList.add('hidden');
                     document.getElementById('statusIndicator').classList.remove('bg-red-600');
                     document.getElementById('local-player').innerHTML = '';
-                } catch (e) {
-                    console.error("Stop failed:", e);
-                }
+                } catch (e) {}
             }
         };
 
@@ -288,7 +267,7 @@
                     encoderConfig: "720p_1",
                     facingMode: currentFacingMode,
                     optimizationMode: "detail",
-                    bitrate: { min: 1000, max: 2000 }
+                    bitrate: { min: 1500, max: 3000 }
                 });
 
                 await hostClient.unpublish(localTracks.videoTrack);
@@ -297,10 +276,9 @@
                 localTracks.videoTrack.play("local-player");
                 await hostClient.publish(localTracks.videoTrack);
 
-                showToast(`Switched to ${currentFacingMode === "user" ? "selfie" : "back"} camera!`);
+                showToast(`Switched to ${currentFacingMode === "user" ? "selfie" : "back"} camera`);
             } catch (e) {
-                console.error("Switch failed:", e);
-                showToast("Couldn't switch camera");
+                showToast("Camera switch failed");
             }
         };
 
@@ -310,7 +288,7 @@
                 message: "The Elite League Finals are live now!",
                 timestamp: Date.now()
             });
-            showToast("Notification sent to all viewers!");
+            showToast("Notification sent!");
         };
 
         onValue(ref(db, 'globalAlert'), snap => {
@@ -327,7 +305,6 @@
             try {
                 viewerClient.setClientRole("audience");
                 await viewerClient.join(AGORA_APP_ID, CHANNEL, null, null);
-                console.log("Viewer connected");
 
                 viewerClient.on("user-published", async (user, mediaType) => {
                     await viewerClient.subscribe(user, mediaType);
@@ -348,9 +325,7 @@
                     document.getElementById('alertTitle').innerText = "Stream Ended";
                     document.getElementById('alertMsg').innerText = "Broadcaster stopped.";
                 });
-            } catch (e) {
-                console.warn("Viewer issue:", e);
-            }
+            } catch (e) {}
         }
 
         document.addEventListener("DOMContentLoaded", () => {
@@ -366,9 +341,7 @@
             document.getElementById('closeAlert')?.addEventListener('click', () => closeModal('alertModal'));
             document.getElementById('logoutBtn')?.addEventListener('click', () => location.reload());
 
-            if ("Notification" in window && Notification.permission !== "granted") {
-                Notification.requestPermission();
-            }
+            if ("Notification" in window && Notification.permission !== "granted") Notification.requestPermission();
         });
     </script>
 </body>

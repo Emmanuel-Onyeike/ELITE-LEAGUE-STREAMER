@@ -13,9 +13,9 @@
             transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
             box-shadow: 0 10px 30px -5px rgba(245, 158, 11, 0.5);
         }
-        #chat-messages { 
-            scrollbar-width: thin; 
-            scrollbar-color: #f59e0b #1f2937; 
+        #chat-messages {
+            scrollbar-width: thin;
+            scrollbar-color: #f59e0b #1f2937;
         }
         #chat-messages::-webkit-scrollbar {
             width: 6px;
@@ -24,6 +24,8 @@
             background-color: #f59e0b;
             border-radius: 3px;
         }
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="bg-[#050505] text-white font-sans antialiased overflow-x-hidden">
@@ -104,7 +106,7 @@
                     </div>
                 </div>
 
-                <!-- Chat Box (only visible when live) -->
+                <!-- Live Chat Box – visible to everyone when stream is live -->
                 <div id="chat-container" class="hidden bg-black/70 border-t border-white/10">
                     <div id="chat-messages" class="h-64 overflow-y-auto p-4 space-y-3 text-sm"></div>
                     <div class="p-3 border-t border-white/10 flex gap-2">
@@ -334,16 +336,16 @@
         });
 
         // ────────────────────────────────────────────────
-        // Live Chat (TikTok-style)
+        // Live Chat – open to everyone (admins + viewers)
         // ────────────────────────────────────────────────
         const chatInput = document.getElementById('chat-input');
         const chatSend = document.getElementById('chat-send');
         const chatMessages = document.getElementById('chat-messages');
+        const chatContainer = document.getElementById('chat-container');
 
-        // Send message
         const sendChatMessage = () => {
             const text = chatInput?.value.trim();
-            if (!text || !isStreaming) return;
+            if (!text) return;
 
             const message = {
                 userId: userId,
@@ -360,23 +362,29 @@
             if (e.key === 'Enter') sendChatMessage();
         });
 
-        // Listen for new messages
+        // Show messages in real-time + load existing ones
         onValue(ref(db, 'chat'), snap => {
             const data = snap.val();
-            if (!data) return;
+            chatMessages.innerHTML = '<p class="text-gray-500 text-center text-xs">Live Chat</p>';
 
-            chatMessages.innerHTML = ''; // clear and rebuild (simple, works for small chat)
-            Object.values(data).sort((a, b) => a.timestamp - b.timestamp).forEach(msg => {
-                const div = document.createElement('div');
-                div.className = 'flex items-start gap-2';
-                div.innerHTML = `
-                    <span class="text-amber-400 font-bold">User ${msg.userId}</span>
-                    <span class="text-gray-300">${msg.text}</span>
-                `;
-                chatMessages.appendChild(div);
-            });
+            if (!data) {
+                chatMessages.innerHTML += '<p class="text-gray-500 text-center mt-4">No messages yet...</p>';
+                return;
+            }
 
-            // Auto-scroll to bottom
+            Object.values(data)
+                .sort((a, b) => a.timestamp - b.timestamp)
+                .slice(-50) // keep only last 50 messages
+                .forEach(msg => {
+                    const div = document.createElement('div');
+                    div.className = 'fade-in flex items-start gap-2';
+                    div.innerHTML = `
+                        <span class="text-amber-400 font-bold min-w-[80px]">User ${msg.userId}</span>
+                        <span class="text-gray-200 break-words">${msg.text}</span>
+                    `;
+                    chatMessages.appendChild(div);
+                });
+
             chatMessages.scrollTop = chatMessages.scrollHeight;
         });
 
@@ -384,14 +392,18 @@
             try {
                 viewerClient.setClientRole("audience");
                 await viewerClient.join(AGORA_APP_ID, CHANNEL, null, null);
+                console.log("Viewer joined channel");
 
                 viewerClient.on("user-published", async (user, mediaType) => {
+                    console.log("Viewer: host published", mediaType);
                     await viewerClient.subscribe(user, mediaType);
                     if (mediaType === "video") {
                         document.getElementById('standby-ui')?.classList.add('hidden');
                         document.getElementById('statusIndicator')?.classList.add('bg-red-600');
                         document.getElementById('live-tag')?.classList.remove('hidden');
                         user.videoTrack.play("remote-player");
+                        showToast("Stream is live now!");
+                        chatContainer?.classList.remove('hidden');
                     }
                     if (mediaType === "audio") user.audioTrack.play();
                 });
@@ -403,8 +415,13 @@
                     openModal('alertModal');
                     document.getElementById('alertTitle').innerText = "Stream Ended";
                     document.getElementById('alertMsg').innerText = "Broadcaster stopped.";
+                    showToast("Stream ended");
+                    chatContainer?.classList.add('hidden');
                 });
-            } catch (e) {}
+            } catch (e) {
+                console.error("Viewer join failed:", e);
+                showToast("Failed to connect to stream – refresh page");
+            }
         }
 
         document.addEventListener("DOMContentLoaded", () => {

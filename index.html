@@ -56,9 +56,6 @@
                         <h2 class="text-amber-500 font-black uppercase tracking-widest text-lg">Broadcaster Hub</h2>
                         <p id="broadcastInfo" class="text-gray-400 text-xs italic">Live as Admin</p>
                     </div>
-                    <div class="text-sm text-amber-300">
-                        Viewers Online: <span id="viewers-count-admin" class="font-bold text-white">0</span>
-                    </div>
                     <button id="logoutBtn" class="px-4 py-2 bg-red-600/20 text-red-500 rounded-xl text-[10px] font-black border border-red-500/20 hover:bg-red-600 hover:text-white transition">
                         LOGOUT
                     </button>
@@ -109,12 +106,7 @@
                     </div>
                 </div>
 
-                <!-- Viewers Online Counter (for regular viewers) -->
-                <div class="bg-black/60 border-t border-white/10 px-6 py-3 text-center text-amber-300 text-sm font-medium">
-                    Viewers Online Now: <span id="viewers-count-viewer" class="text-white font-bold">0</span>
-                </div>
-
-                <!-- Live Chat Box -->
+                <!-- Live Chat Box – visible to everyone when stream is live -->
                 <div id="chat-container" class="hidden bg-black/70 border-t border-white/10">
                     <div id="chat-messages" class="h-64 overflow-y-auto p-4 space-y-3 text-sm"></div>
                     <div class="p-3 border-t border-white/10 flex gap-2">
@@ -163,7 +155,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-        import { getDatabase, ref, onValue, runTransaction, set, push, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
+        import { getDatabase, ref, onValue, runTransaction, set, push } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDsxf_2FkvyfU2QQsd_DBytd9pPi6r4o0k",
@@ -188,29 +180,7 @@
         let localTracks = { audioTrack: null, videoTrack: null };
         let isStreaming = false;
         let currentFacingMode = "user";
-        let userId = Math.floor(1000 + Math.random() * 9000);
-
-        // ────────────────────────────────────────────────
-        // Viewers Online Counter (Presence System)
-        // ────────────────────────────────────────────────
-        const viewersRef = ref(db, 'viewersOnline');
-        const myViewerRef = push(viewersRef); // unique key for this user
-
-        // Set presence when connected
-        set(myViewerRef, {
-            connectedAt: serverTimestamp(),
-            page: window.location.pathname || 'main'
-        });
-
-        // Remove when disconnected
-        onDisconnect(myViewerRef).remove();
-
-        // Count online viewers
-        onValue(viewersRef, snap => {
-            const count = snap.numChildren() || 0;
-            document.getElementById('viewers-count-admin')?.innerText = count;
-            document.getElementById('viewers-count-viewer')?.innerText = count;
-        });
+        let userId = Math.floor(1000 + Math.random() * 9000); // random 4-digit ID
 
         const openModal = id => document.getElementById(id)?.classList.remove('hidden');
         const closeModal = id => document.getElementById(id)?.classList.add('hidden');
@@ -371,6 +341,7 @@
         const chatInput = document.getElementById('chat-input');
         const chatSend = document.getElementById('chat-send');
         const chatMessages = document.getElementById('chat-messages');
+        const chatContainer = document.getElementById('chat-container');
 
         const sendChatMessage = () => {
             const text = chatInput?.value.trim();
@@ -391,9 +362,10 @@
             if (e.key === 'Enter') sendChatMessage();
         });
 
+        // Show messages in real-time + load existing ones
         onValue(ref(db, 'chat'), snap => {
             const data = snap.val();
-            chatMessages.innerHTML = '<p class="text-gray-500 text-center text-xs font-semibold">Live Chat</p>';
+            chatMessages.innerHTML = '<p class="text-gray-500 text-center text-xs">Live Chat</p>';
 
             if (!data) {
                 chatMessages.innerHTML += '<p class="text-gray-500 text-center mt-4">No messages yet...</p>';
@@ -402,7 +374,7 @@
 
             Object.values(data)
                 .sort((a, b) => a.timestamp - b.timestamp)
-                .slice(-50)
+                .slice(-50) // keep only last 50 messages
                 .forEach(msg => {
                     const div = document.createElement('div');
                     div.className = 'fade-in flex items-start gap-2';
@@ -431,6 +403,7 @@
                         document.getElementById('live-tag')?.classList.remove('hidden');
                         user.videoTrack.play("remote-player");
                         showToast("Stream is live now!");
+                        chatContainer?.classList.remove('hidden');
                     }
                     if (mediaType === "audio") user.audioTrack.play();
                 });
@@ -443,6 +416,7 @@
                     document.getElementById('alertTitle').innerText = "Stream Ended";
                     document.getElementById('alertMsg').innerText = "Broadcaster stopped.";
                     showToast("Stream ended");
+                    chatContainer?.classList.add('hidden');
                 });
             } catch (e) {
                 console.error("Viewer join failed:", e);
